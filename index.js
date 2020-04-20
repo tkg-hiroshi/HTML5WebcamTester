@@ -39,9 +39,11 @@ const startStreamingVideo = () => {
   if( navigator.mediaDevices.getUserMedia ){
 
     navigator.mediaDevices.getUserMedia( 
-      { video: { facingMode: gCurrentCameraFacingMode } } 
+      { video: { facingMode: gCurrentCameraFacingMode, width: 1280, height: 720} }
     ).then( ( stream ) => {
       video.srcObject = stream;
+      var videoTrack = stream.getVideoTracks()[0];
+      console.log(videoTrack.getCapabilities())
     } );
     
   }
@@ -93,14 +95,48 @@ let previousDecodedData = undefined;
 const decodeQR = () => {
 
   // Capture: draw to hidden canvas
-  const canvas = document.getElementById( 'hiddenCanvasForQR' );
-  canvas.width = video.videoWidth;
-  canvas.height = video.videoHeight;
+  const hiddenCanvas = document.getElementById( 'hiddenCanvasForQR' );
+  hiddenCanvas.width = video.videoWidth;
+  hiddenCanvas.height = video.videoHeight;
+  const hctx = hiddenCanvas.getContext('2d');
+  hctx.drawImage( video, 0, 0, hiddenCanvas.width, hiddenCanvas.height );
+  const hiddenImageData = hctx.getImageData( 0, 0, hiddenCanvas.width/2, hiddenCanvas.height/2);
+
+  // Capture: draw to hidden canvas
+  const canvas = document.getElementById( 'canvasForQR' );
   const ctx = canvas.getContext('2d');
-  ctx.drawImage( video, 0, 0, canvas.width, canvas.height );
+
+
+  // Trimming
+  // const range = 200;
+  // let imageData = ctx.createImageData(range, range);
+  // for(let i = 0; i < imageData.height; i++){
+  //   for(let j = 0; j < imageData.width; j++){
+  //     const tar_index = (j + i*imageData.width) * 4;
+  //     const res_i = i + (hiddenImageData.height - imageData.height) / 2
+  //     const res_j = j + (hiddenImageData.width - imageData.width) / 2
+  //     const res_index = (res_j + res_i*hiddenImageData.width) * 4;
+  //     imageData.data[tar_index + 0] = hiddenImageData.data[res_index + 0];
+  //     imageData.data[tar_index + 1] = hiddenImageData.data[res_index + 1];
+  //     imageData.data[tar_index + 2] = hiddenImageData.data[res_index + 2];
+  //     imageData.data[tar_index + 3] = hiddenImageData.data[res_index + 3];
+
+  //   }
+  // }
+  let imageData = hiddenImageData;
+
+  // Picture Effect for QR
+  for(let i = 0; i < imageData.height; i++){
+    for(let j = 0; j < imageData.width; j++){
+      const index = (j + i*imageData.width) * 4;
+      pictureEffect(imageData, index, 'gray');
+    }
+  }
+
+  ctx.putImageData(imageData, 0, 0)
+  // ctx.drawImage( imageData, 0, 0, imageData.width, imageData.height );
 
   // Decode: 
-  const imageData = ctx.getImageData( 0, 0, canvas.width, canvas.height );
   const code = jsQR( imageData.data, imageData.width, imageData.height, {
     inversionAttempts: "dontInvert",
   } );
@@ -131,6 +167,53 @@ const decodeQR = () => {
 
 }
 
+function pictureEffect(imageData, index, code){
+
+  if(code === 'gray'){
+    const v = 0.30 * imageData.data[index] + 0.59 * imageData.data[index + 1] + 0.11 * imageData.data[index + 2];
+    imageData.data[index] = v;
+    imageData.data[index + 1] = v;
+    imageData.data[index + 2] = v;
+  }else if (code === '2val'){
+    const v = 0.30 * imageData.data[index] + 0.59 * imageData.data[index + 1] + 0.11 * imageData.data[index + 2];
+    if(v > 100){
+      imageData.data[index] = 255;
+      imageData.data[index + 1] = 255;
+      imageData.data[index + 2] = 255;
+    }else{
+      imageData.data[index] = 0;
+      imageData.data[index + 1] = 0;
+      imageData.data[index + 2] = 0;
+    }
+  }else if(code === 'bright'){
+    const corr = 15;
+    if(imageData.data[index] + corr > 255){
+      imageData.data[index] = 255;
+    }else{
+      imageData.data[index] += corr;
+    }
+    index++;
+    if(imageData.data[index] + corr > 255){
+      imageData.data[index] = 255;
+    }else{
+      imageData.data[index] += corr;
+    }
+    index++;
+    if(imageData.data[index] + corr > 255){
+      imageData.data[index] = 255;
+    }else{
+      imageData.data[index] += corr;
+    }
+  }
+}
+
+// function pictureEffect(imageData, index, corr){
+//   if((imageData.data[index] + corr) > 255){
+//     return 255;
+//   }else{
+//     return imageData.data[index] + corr;
+//   }
+// }
 
 // Reference => https://gist.github.com/froop/962669
 const getYYYYMMDD_hhmmss = ( isNeedUS, isNeedmsec ) => {
