@@ -40,15 +40,46 @@ const startStreamingVideo = () => {
 
     navigator.mediaDevices.getUserMedia( 
       { video: { facingMode: gCurrentCameraFacingMode, width: 1280, height: 720} }
-    ).then( ( stream ) => {
+    ).then( async ( stream ) => {
+      await sleep(1000);
       video.srcObject = stream;
-      var videoTrack = stream.getVideoTracks()[0];
-      console.log(videoTrack.getCapabilities())
+      const videoTrack = stream.getVideoTracks()[0];
+      const capabilities = videoTrack.getCapabilities();
+      const settings = videoTrack.getSettings();
+
+      const input = document.querySelector('input[type="range"]');
+
+      console.log(capabilities);
+
+      if (!('zoom' in capabilities)) {
+        document.getElementById('logOut').innerHTML += 'Zoom is not supported by ' + videoTrack.label + "<br>";
+        console.log('Zoom is not supported by ' + videoTrack.label);
+      }else{
+        document.getElementById('logOut').innerHTML 
+        += 'Zoom is supported by ' + videoTrack.label 
+        + 'min:' + capabilities.zoom.min
+        + 'max:' + capabilities.zoom.max + "<br>";
+        console.log('Zoom is supported by ' + videoTrack.label);
+        videoTrack.applyConstraints({advanced: [ {zoom: 2} ]});
+        // Map zoom to a slider element.
+        input.min = capabilities.zoom.min;
+        input.max = capabilities.zoom.max;
+        input.step = capabilities.zoom.step;
+        input.value = settings.zoom;
+        input.oninput = function(event) {
+          videoTrack.applyConstraints({advanced: [ {zoom: event.target.value} ]});
+        }
+        input.hidden = false;
+      }
     } );
     
   }
 
 }
+function sleep(ms = 0) {
+  return new Promise(r => setTimeout(r, ms));
+}
+
 startStreamingVideo();
 
 // Capture image from video streaming after loading the video stream.
@@ -100,7 +131,7 @@ const decodeQR = () => {
   hiddenCanvas.height = video.videoHeight;
   const hctx = hiddenCanvas.getContext('2d');
   hctx.drawImage( video, 0, 0, hiddenCanvas.width, hiddenCanvas.height );
-  const hiddenImageData = hctx.getImageData( 0, 0, hiddenCanvas.width/2, hiddenCanvas.height/2);
+  const hiddenImageData = hctx.getImageData( 0, hiddenCanvas.height / 2 - hiddenCanvas.width / 2, hiddenCanvas.width / 2, hiddenCanvas.height / 2);
 
   // Capture: draw to hidden canvas
   const canvas = document.getElementById( 'canvasForQR' );
@@ -129,7 +160,7 @@ const decodeQR = () => {
   for(let i = 0; i < imageData.height; i++){
     for(let j = 0; j < imageData.width; j++){
       const index = (j + i*imageData.width) * 4;
-      pictureEffect(imageData, index, 'gray');
+      pictureEffect(imageData, index, 'none');
     }
   }
 
